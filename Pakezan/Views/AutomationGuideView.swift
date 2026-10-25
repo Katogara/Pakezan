@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// ショートカットの時刻オートメーションを 8 本作る手順。初回設定と設定画面の両方で使う
+/// ショートカットに時刻のオートメーションを 8 つ付ける手順 (iOS 27 の画面で確認)。初回設定と設定画面の両方で使う
 struct AutomationGuideView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
@@ -9,14 +9,16 @@ struct AutomationGuideView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            PhraseText("3時間ごとに記録するため、ショートカットアプリで時刻のオートメーションを8本作ります。最初に一度だけ必要な作業です。")
+            PhraseText("3時間ごとに記録するため、ショートカットアプリで、パケざんを動かす時刻を8つ設定します。最初に一度だけ必要な作業です。手順は iOS 27 の画面に合わせています。")
 
             VStack(alignment: .leading, spacing: 10) {
-                step(1, "ショートカットアプリを開き、下の「オートメーション」を選ぶ")
-                step(2, "右上の「＋」を押し、「特定の時刻」を選ぶ")
-                step(3, "時刻を下の一覧のどれかにし、「毎日」を選ぶ")
-                step(4, "「すぐに実行」を選ぶ（確認なしで動かすために必要です）")
-                step(5, "アクションで「パケざん」の「通信量を記録する」を選び、完了を押す")
+                step(1, "ショートカットアプリを開く。「すべてのショートカット」の画面が出たら、左上の「＜」を押し、「ライブラリ」の「オートメーション」を選ぶ")
+                step(2, "下の「＋」を押し、「新規ショートカット」の画面が出たら、右上の「編集」を押す")
+                step(3, "下の検索欄を上に引き出して「パケざん」と入れ、「通信量を記録する」を押す")
+                step(4, "もう一度検索欄を引き出し、青い「オートメーション」を押してから「時刻」を押す。増えた「時間」を押して 0:00 にする")
+                step(5, "4をくり返して、3:00、6:00、9:00、12:00、15:00、18:00、21:00 を足す。時刻どうしは「または」でつながります")
+                step(6, "どれかの時刻の右の「＞」を押し、「繰り返し」が「毎日」、「オートメーション」がオンになっていることを確かめる")
+                step(7, "左上の「＜」で戻り、「オートメーション」の一覧に出ていれば完了")
             }
 
             Button {
@@ -28,7 +30,7 @@ struct AutomationGuideView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
 
-            Text("作った時刻に印を付けてください")
+            Text("設定した時刻に印を付けてください")
                 .font(.headline)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 10) {
                 ForEach(Self.hours, id: \.self) { hour in
@@ -45,7 +47,7 @@ struct AutomationGuideView: View {
                     .tint(done ? Palette.accent : Color.secondary)
                 }
             }
-            PhraseText("8本そろうと、ホームで「届いていない時刻」が出なくなります。")
+            PhraseText("8つそろうと、ホームで「届いていない時刻」が出なくなります。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
