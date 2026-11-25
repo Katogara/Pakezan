@@ -17,6 +17,10 @@ struct StoredState: Codable, Equatable {
     var onboardedAt: Date?
     /// 初回設定で「作った」と印を付けたオートメーションの時刻
     var automationHoursDone: [Int] = []
+    /// 期間ごとに、知らせた中でいちばん高い料金の段階の番号 (キーは期間の始まりの時刻)
+    var notifiedTiers: [String: Int] = [:]
+    /// はじめの説明を見終えた (または飛ばした) 日時
+    var introSeenAt: Date?
 
     init() {}
 
@@ -34,6 +38,8 @@ struct StoredState: Codable, Equatable {
         dailySummaryEnabled = try c.decodeIfPresent(Bool.self, forKey: .dailySummaryEnabled) ?? true
         onboardedAt = try c.decodeIfPresent(Date.self, forKey: .onboardedAt)
         automationHoursDone = try c.decodeIfPresent([Int].self, forKey: .automationHoursDone) ?? []
+        notifiedTiers = try c.decodeIfPresent([String: Int].self, forKey: .notifiedTiers) ?? [:]
+        introSeenAt = try c.decodeIfPresent(Date.self, forKey: .introSeenAt)
     }
 }
 
@@ -139,6 +145,13 @@ final class AppModel {
             state.notifiedLevels[key] = level
         }
 
+        // 段階制のプランで、次の料金の段階に入ったら一度だけ知らせる
+        let spec = plan.preset.spec
+        if let tier = spec.tierIndex(usedGB: Format.gb(summary.used)), tier > (state.notifiedTiers[key] ?? 0) {
+            notifier.postTierUp(spec: spec, index: tier)
+            state.notifiedTiers[key] = tier
+        }
+
         let day = Format.dayKey(now, calendar: calendar)
         if state.dailySummaryEnabled, calendar.component(.hour, from: now) >= 21, state.lastDailySummary != day {
             notifier.postDailySummary(summary)
@@ -193,6 +206,17 @@ final class AppModel {
 
     func finishOnboarding() {
         update { $0.onboardedAt = .now }
+    }
+
+    var hasSeenIntro: Bool { state.introSeenAt != nil }
+
+    func finishIntro() {
+        update { $0.introSeenAt = .now }
+    }
+
+    /// プランを選び直す。容量は新しいプランの既定にし、締め日は今のままにする
+    func choosePlan(_ preset: PlanPreset) {
+        setPlan(Plan(preset: preset, closingDay: plan.closingDay))
     }
 
     private func update(_ change: (inout StoredState) -> Void) {

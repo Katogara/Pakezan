@@ -107,32 +107,34 @@ struct Sample: Codable, Identifiable, Equatable {
     func wifi(in range: TimeRange) -> Double { portion(in: range) * Double(wifi) }
 }
 
-/// プランの選択肢
-enum PlanPreset: String, Codable, CaseIterable, Identifiable {
-    case linemoMini
-    case povo20
-    case custom
+/// 選んだプラン。中身は PlanCatalog にあり、保存するのは名前 (id) だけ。
+/// 前の版で保存した "linemoMini" "povo20" "custom" もそのまま読める
+struct PlanPreset: Codable, Hashable, Identifiable {
+    let id: String
 
-    var id: String { rawValue }
+    static let linemoMini = PlanPreset(id: "linemoMini")
+    static let povo20 = PlanPreset(id: "povo20")
+    static let custom = PlanPreset(id: "custom")
 
-    var title: String {
-        switch self {
-        case .linemoMini: "LINEMO ミニプラン（3GB）"
-        case .povo20: "povo1.0（20GB）"
-        case .custom: "そのほかのプラン"
-        }
+    init(id: String) { self.id = id }
+
+    init(from decoder: Decoder) throws {
+        id = try decoder.singleValueContainer().decode(String.self)
     }
 
-    var defaultCapGB: Double {
-        switch self {
-        case .linemoMini: 3
-        case .povo20: 20
-        case .custom: 3
-        }
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(id)
     }
+
+    /// 一覧にない名前 (この先プランを消したときなど) は「そのほかのプラン」として扱う
+    var spec: PlanSpec { PlanCatalog.spec(id: id) ?? PlanCatalog.spec(id: "custom")! }
+
+    var title: String { spec.title }
+    var defaultCapGB: Double { spec.defaultCapGB }
 
     /// LINE ギガフリーで、LINE アプリの通信は通信会社が数えない
-    var excludesLINE: Bool { self == .linemoMini }
+    var excludesLINE: Bool { spec.excludesLINE }
 }
 
 struct Plan: Codable, Equatable {

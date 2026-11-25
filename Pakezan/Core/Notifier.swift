@@ -33,6 +33,16 @@ final class Notifier {
         post(id: "alert-\(level.rawValue)", title: "パケざん", body: body)
     }
 
+    /// 段階制のプランで、使った量が次の料金の段階に入った
+    func postTierUp(spec: PlanSpec, index: Int) {
+        guard spec.tiers.indices.contains(index), index > 0 else { return }
+        let tier = spec.tiers[index]
+        let previous = spec.tiers[index - 1].upToGB.map { Format.gbText($0) } ?? ""
+        let price = tier.yen.map { "（月額 \($0.formatted())円）" } ?? ""
+        post(id: "tier-\(index)", title: "パケざん",
+             body: "今月の使用量が\(previous)を超え、\(spec.name)の料金が「\(Format.tierText(tier))」の段階になりました\(price)。")
+    }
+
     func postDailySummary(_ summary: UsageSummary) {
         let outlook: String
         if let forecast = summary.forecast {
