@@ -36,10 +36,17 @@ struct ContentView: View {
             SettingsView()
                 .tabItem { Label("設定", systemImage: "gearshape") }
         }
-        .fullScreenCover(isPresented: .constant(!model.isOnboarded)) {
-            OnboardingView()
-                .environment(model)
-                .fontDesign(.rounded)
+        // はじめての人は、説明 → 初回設定の順に見る。設定を済ませた人にも、説明は一度だけ見せる
+        .fullScreenCover(isPresented: .constant(!model.isOnboarded || !model.hasSeenIntro)) {
+            Group {
+                if !model.hasSeenIntro {
+                    IntroView { model.finishIntro() }
+                } else {
+                    OnboardingView()
+                }
+            }
+            .environment(model)
+            .fontDesign(.rounded)
         }
     }
 }

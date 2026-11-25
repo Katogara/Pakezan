@@ -84,7 +84,29 @@ private struct RemainingCard: View {
                     }
                 }
             }
+            if let tierText = Self.tierText(spec: plan.preset.spec, used: summary.used) {
+                Divider()
+                Label {
+                    PhraseText(tierText)
+                } icon: {
+                    Image(systemName: "stairs")
+                }
+                .font(.subheadline)
+            }
         }
+    }
+
+    /// 段階制のプランで、今の段階と次の段階までの残り
+    static func tierText(spec: PlanSpec, used: Double) -> String? {
+        guard let index = spec.tierIndex(usedGB: Format.gb(used)) else { return nil }
+        let tier = spec.tiers[index]
+        let price = tier.yen.map { "（\($0.formatted())円）" } ?? ""
+        var text = "今の料金は「\(Format.tierText(tier))」の段階です\(price)。"
+        if let limit = tier.upToGB, index + 1 < spec.tiers.count {
+            let next = spec.tiers[index + 1]
+            text += "あと\(Format.bytes(max(0, limit * Plan.bytesPerGB - used)))で「\(Format.tierText(next))」の段階に上がります。"
+        }
+        return text
     }
 }
 

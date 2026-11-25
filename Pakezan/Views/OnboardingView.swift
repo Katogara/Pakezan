@@ -8,16 +8,21 @@ struct OnboardingView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    switch step {
-                    case 0: planStep
-                    case 1: notificationStep
-                    case 2: AutomationGuideView()
-                    default: usageStep
+            Group {
+                if step == 0 {
+                    planStep
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 20) {
+                            switch step {
+                            case 1: notificationStep
+                            case 2: AutomationGuideView()
+                            default: usageStep
+                            }
+                        }
+                        .padding()
                     }
                 }
-                .padding()
             }
             .navigationTitle(["プランを選ぶ", "通知を許可する", "オートメーションを作る", "今の使用量を入れる"][min(step, 3)])
             .safeAreaInset(edge: .bottom) {
@@ -42,23 +47,22 @@ struct OnboardingView: View {
             }
         }
         .onAppear {
-            if model.state.plan == nil { model.setPlan(Plan(preset: .linemoMini)) }
+            if model.state.plan == nil { model.setPlan(Plan(preset: .custom)) }
         }
     }
 
     private var planStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HeadlineText("パケざんは、パケットの残りを見守ります")
-                .font(.title2.bold())
-            PhraseText("3時間ごとにこの携帯のモバイル通信量を記録し、上限に達しそうなときに早めに知らせます。この携帯で使っているプランを選んでください。")
-            Form { PlanFields() }
-                .frame(height: 220)
-                .scrollDisabled(true)
-            if model.plan.preset.excludesLINE {
-                PhraseText("LINEMO は LINE アプリの通信を数えません（LINE ギガフリー）。パケざんは LINE の分も含めて数えるので、少し多めに出ます。")
-                    .font(.footnote)
+        Form {
+            Section {
+                PlanFields()
+            } header: {
+                PhraseText("この携帯で使っている会社とプランを選んでください。一覧にないときは、会社で「そのほかの会社」を選びます。")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .textCase(nil)
+                    .padding(.bottom, 4)
             }
+            PlanInfoSection()
         }
     }
 
