@@ -228,20 +228,21 @@ private struct BadgeSample: View {
     }
 }
 
+/// 吹き出しの色 (型引数を持つ型の中には static の定数を置けないので、外に置く)
+private let speechBubbleFill = Color(red: 0.88, green: 0.96, blue: 0.96)
+
 /// 左にしっぽのある吹き出し
 private struct SpeechBubble<Content: View>: View {
     @ViewBuilder let content: Content
-
-    private static let fill = Color(red: 0.88, green: 0.96, blue: 0.96)
 
     var body: some View {
         content
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(Self.fill, in: .rect(cornerRadius: 16))
+            .background(speechBubbleFill, in: .rect(cornerRadius: 16))
             .background(alignment: .leading) {
                 Triangle()
-                    .fill(Self.fill)
+                    .fill(speechBubbleFill)
                     .frame(width: 12, height: 16)
                     .offset(x: -9)
             }
