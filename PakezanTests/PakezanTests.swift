@@ -202,4 +202,48 @@ final class PakezanTests: XCTestCase {
         XCTAssertTrue(state.corrections.isEmpty)
         XCTAssertNil(state.plan)
     }
+
+    func testOldPlanNamesStillLoad() throws {
+        let json = #"{"plan":{"preset":"linemoMini","capGB":3,"closingDay":0}}"#
+        let state = try JSONDecoder().decode(StoredState.self, from: Data(json.utf8))
+        XCTAssertEqual(state.plan?.preset, .linemoMini)
+        XCTAssertTrue(state.plan!.preset.excludesLINE)
+        XCTAssertEqual(state.plan?.preset.spec.carrier, .linemo)
+        // 書き出しても同じ名前で残る
+        let encoded = String(decoding: try JSONEncoder().encode(state.plan!), as: UTF8.self)
+        XCTAssertTrue(encoded.contains(#""preset":"linemoMini""#))
+    }
+
+    func testUnknownPlanFallsBackToCustom() {
+        XCTAssertEqual(PlanPreset(id: "noSuchPlan").spec.id, "custom")
+    }
+
+    // MARK: - プランの一覧
+
+    func testCatalogIsConsistent() {
+        let ids = PlanCatalog.all.map(\.id)
+        XCTAssertEqual(Set(ids).count, ids.count, "プランの id が重なっている")
+        for carrier in Carrier.allCases {
+            XCTAssertFalse(carrier.plans.isEmpty, "\(carrier.name) のプランがない")
+        }
+        for spec in PlanCatalog.all {
+            XCTAssertFalse(spec.capOptions.isEmpty, spec.id)
+            if spec.kind == .tiered {
+                XCTAssertGreaterThanOrEqual(spec.tiers.count, 2, spec.id)
+                let limits = spec.tiers.compactMap(\.upToGB)
+                XCTAssertEqual(limits, limits.sorted(), spec.id)
+            }
+        }
+    }
+
+    func testTierIndex() {
+        let linemo = PlanCatalog.spec(id: "linemoBest")!
+        XCTAssertEqual(linemo.tierIndex(usedGB: 2.9), 0)
+        XCTAssertEqual(linemo.tierIndex(usedGB: 3.0), 0)
+        XCTAssertEqual(linemo.tierIndex(usedGB: 3.1), 1)
+        XCTAssertEqual(linemo.tierIndex(usedGB: 12), 1)       // 最後の段階を超えても最後の段階
+        let rakuten = PlanCatalog.spec(id: "rakutenSaikyo")!
+        XCTAssertEqual(rakuten.tierIndex(usedGB: 25), 2)      // 無制限の段階
+        XCTAssertNil(PlanCatalog.spec(id: "ymobileS")!.tierIndex(usedGB: 1))
+    }
 }
