@@ -8,27 +8,27 @@ struct IntroView: View {
     @State private var page = 0
 
     private static let pages: [IntroPage] = [
-        IntroPage(line: "ぼく、パケざん。あなたのパケットの残りを見守るよ",
+        IntroPage(line: "パケです〜。パケットの残り（パケざん）、パケが見ておきますね",
                   symbol: "exclamationmark.triangle.fill", symbolColor: .orange,
                   title: "気づいたらギガがない",
                   lines: ["月の途中で急に通信が遅くなって、そこで初めて使い切ったと気づく。",
                           "iPhone の画面では、今月あとどれだけ使えるかが分かりません。"]),
-        IntroPage(line: "アプリを開かなくても、ぼくが数えておくね",
+        IntroPage(line: "アプリを開かなくても大丈夫。パケが数えておきますよ〜",
                   symbol: "clock.arrow.circlepath", symbolColor: .teal,
                   title: "3時間ごとにそっと記録",
                   lines: ["パケざんはこの携帯のモバイル通信量を3時間ごとに記録します。",
                           "締め日で区切って数えるので、毎月の数え直しも自動です。"]),
-        IntroPage(line: "アイコンの数字は、残りの「%」だよ",
+        IntroPage(line: "アイコンの数字はねぇ、残りの「%」なんです",
                   symbol: nil, symbolColor: .teal,
                   title: "残りがひと目で分かる",
                   lines: ["アイコンの右上の数字は残りの割合です。ホーム画面を見るだけで分かります。",
                           "アプリを開けば、残りの量と、このペースだと何日に上限に達するかが見られます。"]),
-        IntroPage(line: "あぶないときだけ、そっと知らせるね",
+        IntroPage(line: "あぶないときだけ、そっとお知らせしますね〜",
                   symbol: "bell.badge.fill", symbolColor: .red,
                   title: "危ないときだけお知らせ",
                   lines: ["ペースが早いとき、残りが20%になったとき、上限が近いときに通知が届きます。",
                           "使った量で料金が変わるプランなら、次の料金の段階に入ったときにも知らせます。"]),
-        IntroPage(line: "最初の設定だけ、いっしょにがんばろう！",
+        IntroPage(line: "最初の設定だけ、いっしょにがんばりましょ〜",
                   symbol: "checklist", symbolColor: .indigo,
                   title: "最初だけひと手間",
                   lines: ["使っている会社とプランを選び、ショートカットアプリに記録する時刻を8つ登録します（5分ほど）。",
@@ -92,7 +92,7 @@ struct IntroView: View {
 
 /// 説明の 1 ページ分の中身
 private struct IntroPage {
-    /// パケざんのひとこと (2 行まで)
+    /// パケさんのひとこと (2 行まで。のんびりした口調で、自分のことは「パケ」と呼ぶ)
     let line: String
     /// 絵にする SF Symbols。nil ならアイコンとバッジの見本を出す
     let symbol: String?
