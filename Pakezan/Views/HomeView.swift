@@ -5,12 +5,14 @@ struct HomeView: View {
     @State private var showCorrection = false
     @State private var showExtra = false
     @State private var showTopping = false
+    @State private var showIntro = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
                     let summary = model.summary
+                    header
                     RemainingCard(summary: summary, plan: model.plan)
                     if let notice = model.plan.preset.spec.uncountedNotice {
                         UncountedCard(title: notice.title, message: notice.message)
@@ -43,12 +45,38 @@ struct HomeView: View {
                 }
                 .padding()
             }
-            .navigationTitle("パケざん")
+            .toolbar(.hidden, for: .navigationBar)
+            .fullScreenCover(isPresented: $showIntro) {
+                IntroView { showIntro = false }
+            }
             .refreshable { await model.measure(source: .app) }
             .sheet(isPresented: $showCorrection) { CorrectionSheet().environment(model) }
             .sheet(isPresented: $showExtra) { ExtraSheet().environment(model) }
             .sheet(isPresented: $showTopping) { ToppingSheet().environment(model) }
         }
+    }
+
+    /// タイトルを押すと、いつでもはじめの説明を見られる (はじめるアプリと同じ作り)
+    private var header: some View {
+        Button { showIntro = true } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("パケざん")
+                        .font(.largeTitle.bold())
+                        .foregroundStyle(Color.primary)
+                    Image(systemName: "questionmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(Palette.accent.opacity(0.6))
+                }
+                PhraseText("タイトルを押すと、はじめの説明をもう一度見られます")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("はじめの説明を表示します")
+        .padding(.top, 8)
     }
 }
 
