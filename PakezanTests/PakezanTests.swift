@@ -214,6 +214,13 @@ final class PakezanTests: XCTestCase {
         XCTAssertTrue(encoded.contains(#""preset":"linemoMini""#))
     }
 
+    func testUncountedNoticeOnlyForLINEFreePlans() {
+        XCTAssertNotNil(PlanCatalog.spec(id: "linemoBest")!.uncountedNotice)
+        XCTAssertNotNil(PlanCatalog.spec(id: "linemoMini")!.uncountedNotice)
+        XCTAssertNil(PlanCatalog.spec(id: "ahamo")!.uncountedNotice)
+        XCTAssertTrue(PlanCatalog.spec(id: "linemoBest")!.uncountedNotice!.message.contains("LINEMO"))
+    }
+
     func testUnknownPlanFallsBackToCustom() {
         XCTAssertEqual(PlanPreset(id: "noSuchPlan").spec.id, "custom")
     }
