@@ -227,7 +227,8 @@ final class PakezanTests: XCTestCase {
             XCTAssertFalse(carrier.plans.isEmpty, "\(carrier.name) のプランがない")
         }
         for spec in PlanCatalog.all {
-            XCTAssertFalse(spec.capOptions.isEmpty, spec.id)
+            // 買い切りのプランは、トッピングごとに容量が決まるので選択肢を持たない
+            XCTAssertEqual(spec.capOptions.isEmpty, spec.kind == .prepaid, spec.id)
             if spec.kind == .tiered {
                 XCTAssertGreaterThanOrEqual(spec.tiers.count, 2, spec.id)
                 let limits = spec.tiers.compactMap(\.upToGB)
@@ -245,5 +246,57 @@ final class PakezanTests: XCTestCase {
         let rakuten = PlanCatalog.spec(id: "rakutenSaikyo")!
         XCTAssertEqual(rakuten.tierIndex(usedGB: 25), 2)      // 無制限の段階
         XCTAssertNil(PlanCatalog.spec(id: "ymobileS")!.tierIndex(usedGB: 1))
+    }
+
+    // MARK: - 買い切りのプラン
+
+    private let povo = Plan(preset: PlanPreset(id: "povo2Topping"))
+
+    func testToppingsUseEarliestExpiryFirst() {
+        let a = Topping(gb: 3, start: date(10, 1), end: date(10, 31))
+        let b = Topping(gb: 30, start: date(10, 5), end: date(11, 4))
+        let samples = [
+            sample(date(10, 1), date(10, 3), 1 * gb),   // A だけ → A 残り 2GB
+            sample(date(10, 6), date(10, 7), 3 * gb),   // A の 2GB を使い切り、残り 1GB を B から
+        ]
+        let ledger = Ledger(plan: povo, samples: samples, toppings: [a, b], calendar: calendar)
+        let statuses = ledger.toppingStatuses(at: date(10, 8))
+        XCTAssertEqual(statuses.first { $0.id == a.id }?.remaining ?? -1, 0, accuracy: 1)
+        XCTAssertEqual(statuses.first { $0.id == b.id }?.remaining ?? -1, 29 * gb, accuracy: 1)
+        let summary = ledger.summary(at: date(10, 8))
+        XCTAssertEqual(summary.cap, 33 * gb, accuracy: 1)
+        XCTAssertEqual(summary.used, 4 * gb, accuracy: 1)
+        XCTAssertEqual(summary.period, TimeRange(start: date(10, 1), end: date(11, 4)))
+        // A の期限が過ぎたら、B だけが残る
+        let later = ledger.summary(at: date(11, 1))
+        XCTAssertEqual(later.cap, 30 * gb, accuracy: 1)
+        XCTAssertEqual(later.remaining, 29 * gb, accuracy: 1)
+    }
+
+    func testUnlimitedToppingIsNotCounted() {
+        let data = Topping(gb: 3, start: date(10, 1), end: date(10, 31))
+        let unlimited = Topping(gb: nil, start: date(10, 10), end: date(10, 11))
+        let samples = [
+            sample(date(10, 10, 1), date(10, 10, 4), 2 * gb),   // 使い放題の間
+            sample(date(10, 12), date(10, 12, 3), 0.5 * gb),
+        ]
+        let ledger = Ledger(plan: povo, samples: samples, toppings: [data, unlimited], calendar: calendar)
+        XCTAssertEqual(ledger.summary(at: date(10, 13)).remaining, 2.5 * gb, accuracy: 1)
+    }
+
+    func testRemainingCorrectionSetsRemaining() {
+        let topping = Topping(gb: 30, start: date(10, 1), end: date(10, 31))
+        let samples = [sample(date(10, 1), date(10, 5), 4 * gb), sample(date(10, 5), date(10, 6), 1 * gb)]
+        let correction = Correction(asOf: date(10, 5, 12), usedBytes: 0, remainingBytes: 20 * gb)
+        let ledger = Ledger(plan: povo, samples: samples, corrections: [correction], toppings: [topping], calendar: calendar)
+        // 10/5 12時に残り 20GB → そのあと 10/6 の記録の 1GB を引く
+        XCTAssertEqual(ledger.summary(at: date(10, 7)).remaining, 19 * gb, accuracy: 1)
+    }
+
+    func testNoActiveToppingDoesNotAlert() {
+        let old = Topping(gb: 3, start: date(9, 1), end: date(9, 30))
+        let summary = Ledger(plan: povo, samples: [], toppings: [old], calendar: calendar).summary(at: date(10, 5))
+        XCTAssertTrue(summary.noActiveTopping)
+        XCTAssertEqual(summary.level, .normal)
     }
 }
