@@ -5,6 +5,7 @@ struct OnboardingView: View {
     @Environment(AppModel.self) private var model
     @State private var step = 0
     @State private var usedGB: Double?
+    @State private var showTopping = false
 
     var body: some View {
         NavigationStack {
@@ -24,12 +25,14 @@ struct OnboardingView: View {
                     }
                 }
             }
-            .navigationTitle(["プランを選ぶ", "通知を許可する", "オートメーションを作る", "今の使用量を入れる"][min(step, 3)])
+            .navigationTitle(["プランを選ぶ", "通知を許可する", "オートメーションを作る",
+                              model.isPrepaid ? "トッピングを入れる" : "今の使用量を入れる"][min(step, 3)])
+            .sheet(isPresented: $showTopping) { ToppingSheet().environment(model) }
             .safeAreaInset(edge: .bottom) {
                 Button {
                     next()
                 } label: {
-                    Text(step < 3 ? "次へ" : (usedGB == nil ? "あとで入れる" : "はじめる"))
+                    Text(step < 3 ? "次へ" : (model.isPrepaid || usedGB != nil ? "はじめる" : "あとで入れる"))
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                 }
@@ -80,7 +83,36 @@ struct OnboardingView: View {
         }
     }
 
+    @ViewBuilder
     private var usageStep: some View {
+        if model.isPrepaid {
+            toppingStep
+        } else {
+            monthlyUsageStep
+        }
+    }
+
+    private var toppingStep: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            PhraseText("今使えるトッピングを入れてください。前から使っているものは、公式アプリに出ている今の残りと期限を入れます。")
+            Button {
+                showTopping = true
+            } label: {
+                Label("トッピングを入れる", systemImage: "plus.circle")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            ForEach(model.activeToppings) { status in
+                ToppingRow(status: status)
+            }
+            PhraseText("あとから、ホームの「トッピングを入れる」でも入れられます。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var monthlyUsageStep: some View {
         VStack(alignment: .leading, spacing: 16) {
             PhraseText("会員ページや公式アプリで、今月すでに使った量を確かめて入れてください。ここから先は、パケざんが増えた分を足していきます。")
             TextField("今月の使用量（GB） 例: 0.8", value: $usedGB, format: .number)
@@ -97,7 +129,7 @@ struct OnboardingView: View {
             step += 1
             return
         }
-        if let usedGB {
+        if let usedGB, !model.isPrepaid {
             model.addCorrection(usedGB: usedGB, asOf: .now)
         }
         model.finishOnboarding()

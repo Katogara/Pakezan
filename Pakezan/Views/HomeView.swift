@@ -4,6 +4,7 @@ struct HomeView: View {
     @Environment(AppModel.self) private var model
     @State private var showCorrection = false
     @State private var showExtra = false
+    @State private var showTopping = false
 
     var body: some View {
         NavigationStack {
@@ -11,7 +12,12 @@ struct HomeView: View {
                 VStack(spacing: 16) {
                     let summary = model.summary
                     RemainingCard(summary: summary, plan: model.plan)
-                    ForecastCard(summary: summary)
+                    if model.isPrepaid {
+                        ToppingsCard(showTopping: $showTopping)
+                    }
+                    if !summary.noActiveTopping {
+                        ForecastCard(summary: summary, isPrepaid: model.isPrepaid)
+                    }
                     WarningCards()
                     DetailsCard(summary: summary)
 
@@ -23,9 +29,9 @@ struct HomeView: View {
                                 .frame(maxWidth: .infinity)
                         }
                         Button {
-                            showExtra = true
+                            if model.isPrepaid { showTopping = true } else { showExtra = true }
                         } label: {
-                            Label("容量を追加した", systemImage: "plus.circle")
+                            Label(model.isPrepaid ? "トッピングを入れる" : "容量を追加した", systemImage: "plus.circle")
                                 .frame(maxWidth: .infinity)
                         }
                     }
@@ -38,6 +44,7 @@ struct HomeView: View {
             .refreshable { await model.measure(source: .app) }
             .sheet(isPresented: $showCorrection) { CorrectionSheet().environment(model) }
             .sheet(isPresented: $showExtra) { ExtraSheet().environment(model) }
+            .sheet(isPresented: $showTopping) { ToppingSheet().environment(model) }
         }
     }
 }
@@ -48,8 +55,24 @@ private struct RemainingCard: View {
     let plan: Plan
 
     var body: some View {
+        if summary.noActiveTopping {
+            Card {
+                Label("使えるトッピングがありません", systemImage: "tray")
+                    .font(.headline)
+                PhraseText("トッピングがないあいだは、通信が遅くなります。買ったら、下の「トッピングを入れる」で入れてください。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Text("今日 \(Format.bytes(summary.today)) 使用")
+                    .font(.subheadline)
+            }
+        } else {
+            gauge
+        }
+    }
+
+    private var gauge: some View {
         let color = Palette.color(for: summary.level)
-        Card {
+        return Card {
             HStack(alignment: .center, spacing: 20) {
                 ZStack {
                     Circle().stroke(color.opacity(0.2), lineWidth: 14)
@@ -110,9 +133,36 @@ private struct RemainingCard: View {
     }
 }
 
+/// 買い切りのプランで、今使えるトッピングの一覧 (期限の近い順)
+private struct ToppingsCard: View {
+    @Environment(AppModel.self) private var model
+    @Binding var showTopping: Bool
+
+    var body: some View {
+        let active = model.activeToppings
+        if !active.isEmpty {
+            Card {
+                Text("使えるトッピング")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                ForEach(active) { status in
+                    ToppingRow(status: status)
+                }
+                if active.contains(where: { $0.topping.gb == nil }) {
+                    PhraseText("使い放題のあいだの通信は、残りから減らしません。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+}
+
 /// このペースだといつ上限に達するか
 private struct ForecastCard: View {
     let summary: UsageSummary
+    /// 買い切りのプランなら、締め日ではなくトッピングの期限で言う
+    let isPrepaid: Bool
 
     var body: some View {
         Card {
@@ -124,7 +174,7 @@ private struct ForecastCard: View {
                     .font(.title2.bold())
                     .foregroundStyle(Palette.color(for: summary.level))
             } else if summary.lastsUntilEnd {
-                Text("締め日まで持ちます")
+                Text(isPrepaid ? "期限まで持ちます" : "締め日まで持ちます")
                     .font(.title2.bold())
             } else {
                 PhraseText("記録がたまると予測を出します")
@@ -132,11 +182,11 @@ private struct ForecastCard: View {
             }
             HStack {
                 let daysLeft = Int(ceil(summary.period.end.timeIntervalSince(summary.now) / 86400))
-                Text("締め日まで\(daysLeft)日")
+                Text(isPrepaid ? "期限まで\(daysLeft)日" : "締め日まで\(daysLeft)日")
                 if let pace = summary.pacePerDay {
                     Text("・1日あたり \(Format.bytes(pace))")
                 }
-                if summary.isEarly, summary.forecast != nil {
+                if !isPrepaid, summary.isEarly, summary.forecast != nil {
                     Text("・月の初めなので目安です")
                 }
             }

@@ -86,7 +86,7 @@ struct PlanFields: View {
                 }
             }
         }
-        if spec.id != PlanPreset.custom.id {
+        if spec.id != PlanPreset.custom.id, spec.kind != .prepaid {
             Picker(spec.capLabel, selection: Binding(get: {
                 entersOwnCap || !spec.capOptions.contains(plan.capGB) ? Self.ownCapTag : plan.capGB
             }, set: { value in
@@ -102,7 +102,7 @@ struct PlanFields: View {
                 Text("ほかの量を入れる").tag(Self.ownCapTag)
             }
         }
-        if spec.id == PlanPreset.custom.id || entersOwnCap || !spec.capOptions.contains(plan.capGB) {
+        if spec.kind != .prepaid, spec.id == PlanPreset.custom.id || entersOwnCap || !spec.capOptions.contains(plan.capGB) {
             Stepper(onIncrement: {
                 var p = plan
                 p.capGB = min(1000, plan.capGB + Self.step(above: plan.capGB))
@@ -115,11 +115,13 @@ struct PlanFields: View {
                 LabeledContent(spec.id == PlanPreset.custom.id ? "月の容量" : "量", value: Format.gbText(plan.capGB))
             }
         }
-        Picker("締め日", selection: Binding(get: { plan.closingDay },
-                                          set: { var p = plan; p.closingDay = $0; model.setPlan(p) })) {
-            Text("月末").tag(0)
-            ForEach(1...27, id: \.self) { day in
-                Text("\(day)日").tag(day)
+        if spec.kind != .prepaid {
+            Picker("締め日", selection: Binding(get: { plan.closingDay },
+                                              set: { var p = plan; p.closingDay = $0; model.setPlan(p) })) {
+                Text("月末").tag(0)
+                ForEach(1...27, id: \.self) { day in
+                    Text("\(day)日").tag(day)
+                }
             }
         }
     }
@@ -172,6 +174,10 @@ enum PlanInfo {
     /// プランについて、利用者に知らせておくこと
     static func lines(for spec: PlanSpec) -> [String] {
         var lines: [String] = []
+        if spec.kind == .prepaid {
+            lines.append("容量と期限を決めて買い切るプランです。トッピングを買ったら、ホームの「トッピングを入れる」で入れてください。期限が近いものから減っていきます。")
+            lines.append("残りがあるトッピングの期限まで2日を切ると、通知で知らせます。")
+        }
         if spec.kind == .tiered {
             lines.append("使った量で料金が決まります。パケざんは「収めたい段階」を上限として見守り、次の段階に入ったときにも知らせます。")
         }

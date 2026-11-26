@@ -14,7 +14,7 @@ struct HoursView: View {
                     let known = usage.slots.reduce(0, +)
 
                     Card {
-                        Text("今月、使った時間帯")
+                        Text(model.isPrepaid ? "トッピングの期間に使った時間帯" : "今月、使った時間帯")
                             .font(.headline)
                         Chart(Array(usage.slots.enumerated()), id: \.offset) { slot, amount in
                             BarMark(x: .value("時間帯", "\(slot * 3)時"), y: .value("MB", amount / 1_000_000))

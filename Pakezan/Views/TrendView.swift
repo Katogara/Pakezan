@@ -14,7 +14,7 @@ struct TrendView: View {
                     let capGB = Format.gb(summary.cap)
 
                     Card {
-                        Text("今月の累計")
+                        Text(model.isPrepaid ? "トッピングの累計" : "今月の累計")
                             .font(.headline)
                         Chart {
                             ForEach(days) { day in
@@ -42,7 +42,9 @@ struct TrendView: View {
                         }
                         .chartXScale(domain: summary.period.start...summary.period.end)
                         .frame(height: 220)
-                        PhraseText("点線は、上限を締め日までの日数で割った理想のペースです。実線が点線より上なら、使い方が早めです。")
+                        PhraseText(model.isPrepaid
+                                   ? "点線は、トッピングの容量を期限までの日数で割った理想のペースです。実線が点線より上なら、使い方が早めです。"
+                                   : "点線は、上限を締め日までの日数で割った理想のペースです。実線が点線より上なら、使い方が早めです。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
