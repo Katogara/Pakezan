@@ -18,6 +18,8 @@ struct PlanSpec: Identifiable, Equatable {
         case tiered
         /// 容量の上限がない
         case unlimited
+        /// 容量と有効期間を決めて、そのつど買い切る (povo2.0 のトッピング)
+        case prepaid
     }
 
     let id: String
@@ -64,6 +66,7 @@ struct PlanSpec: Identifiable, Equatable {
         case .fixed: "月の容量"
         case .tiered: "収めたい段階"
         case .unlimited: "見守る目安"
+        case .prepaid: "容量"
         }
     }
 
@@ -136,7 +139,9 @@ enum PlanCatalog {
                  tiers: [PlanTier(upToGB: 5, yen: 2948), PlanTier(upToGB: 30, yen: 4048)], carryover: true),
         PlanSpec("uqComikomiValue", .uq, "コミコミプランバリュー", .fixed, caps: [35], carryover: true),
 
-        // povo (povo2.0 のトッピングは、期間で区切る買い切りの対応のあとで加える)
+        // povo
+        PlanSpec("povo2Topping", .povo, "povo2.0（トッピング）", .prepaid, caps: [],
+                 afterCap: "トッピングを使い切るか期限が切れると、最大128kbpsになります。"),
         PlanSpec("povo20", .povo, "povo1.0（20GB）", .fixed, caps: [20], closed: true),
 
         // ソフトバンク
@@ -185,4 +190,32 @@ enum PlanCatalog {
     ]
 
     static func spec(id: String) -> PlanSpec? { all.first { $0.id == id } }
+
+    /// povo2.0 のデータトッピングの主なもの (2026 年 11 月下旬に比較記事で確かめた内容。期間限定のものを含む)
+    static let povoToppings: [ToppingPreset] = [
+        ToppingPreset(gb: nil, days: 1, label: "使い放題（24時間）"),
+        ToppingPreset(gb: 1, days: 7),
+        ToppingPreset(gb: 3, days: 30),
+        ToppingPreset(gb: 30, days: 30),
+        ToppingPreset(gb: 90, days: 90),
+        ToppingPreset(gb: 1, days: 180),
+        ToppingPreset(gb: 180, days: 180),
+        ToppingPreset(gb: 360, days: 365),
+        ToppingPreset(gb: 1320, days: 365),
+    ]
+}
+
+/// トッピングの選択肢
+struct ToppingPreset: Identifiable, Hashable {
+    /// 容量 (GB)。nil は使い放題
+    let gb: Double?
+    let days: Int
+    var label: String?
+
+    var id: String { "\(gb.map { "\($0)" } ?? "unlimited")-\(days)" }
+
+    var title: String {
+        if let label { return label }
+        return "\(Format.toppingAmount(gb))（\(days)日間）"
+    }
 }

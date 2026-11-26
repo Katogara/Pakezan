@@ -174,6 +174,29 @@ struct Correction: Codable, Identifiable, Equatable {
     /// 通信会社がこの値を集計した時刻 (入力した時刻ではない)
     var asOf: Date
     var usedBytes: Double
+    /// 買い切りのプランで入れた「その時点の残り」。月ごとのプランでは nil
+    var remainingBytes: Double? = nil
+}
+
+/// 買い切りのトッピング (povo2.0 など)。期間の中だけ使え、期限が近いものから減る
+struct Topping: Codable, Identifiable, Equatable {
+    var id = UUID()
+    /// 容量 (GB)。nil は使い放題 (その間の通信は数えない)
+    var gb: Double?
+    var start: Date
+    /// 期限 (この時刻からは使えない)
+    var end: Date
+
+    var range: TimeRange { TimeRange(start: start, end: end) }
+    var bytes: Double? { gb.map { $0 * Plan.bytesPerGB } }
+}
+
+/// トッピングごとの残り
+struct ToppingStatus: Identifiable, Equatable {
+    var topping: Topping
+    /// 残りのバイト数。使い放題なら nil
+    var remaining: Double?
+    var id: UUID { topping.id }
 }
 
 /// 容量を追加で買った記録
@@ -207,6 +230,8 @@ struct UsageSummary: Equatable {
     var forecast: Date?
     var today: Double
     var hasEstimate: Bool
+    /// 買い切りのプランで、使えるトッピングがない
+    var noActiveTopping = false
 
     var remaining: Double { cap - used }
     var usedFraction: Double { cap > 0 ? used / cap : 0 }
@@ -217,6 +242,7 @@ struct UsageSummary: Equatable {
     var lastsUntilEnd: Bool { pacePerDay != nil && forecast == nil }
 
     var level: AlertLevel {
+        if noActiveTopping { return .normal }
         if remainingFraction <= 0.05 { return .critical }
         if let forecast, forecast.timeIntervalSince(now) <= 2 * 86400 { return .critical }
         if remainingFraction <= 0.2 { return .low }
@@ -232,7 +258,10 @@ struct Ledger {
     var samples: [Sample]
     var corrections: [Correction] = []
     var extras: [Extra] = []
+    var toppings: [Topping] = []
     var calendar: Calendar
+
+    var isPrepaid: Bool { plan.preset.spec.kind == .prepaid }
 
     func cellular(in range: TimeRange) -> Double {
         samples.reduce(0) { $0 + $1.cellular(in: range) }
@@ -260,18 +289,11 @@ struct Ledger {
     }
 
     func summary(at now: Date) -> UsageSummary {
+        if isPrepaid { return prepaidSummary(at: now) }
         let period = plan.period(containing: now, calendar: calendar)
         let used = used(in: period, until: now)
         let cap = cap(for: period)
-
-        // 直近 3 日間 (記録がそれより短ければ、記録のある間) のペース
-        var pace: Double?
-        if let first = samples.map(\.previousDate).min() {
-            let window = TimeRange(start: max(now.addingTimeInterval(-3 * 86400), first), end: now)
-            if window.duration >= 6 * 3600 {
-                pace = cellular(in: window) / window.duration * 86400
-            }
-        }
+        let pace = self.pace(at: now)
         var forecast: Date?
         if cap - used <= 0 {
             forecast = now
@@ -286,15 +308,113 @@ struct Ledger {
                             forecast: forecast, today: cellular(in: today), hasEstimate: hasEstimate)
     }
 
+    /// 直近 3 日間 (記録がそれより短ければ、記録のある間) のペース。記録が 6 時間分に満たなければ nil
+    func pace(at now: Date) -> Double? {
+        guard let first = samples.map(\.previousDate).min() else { return nil }
+        let window = TimeRange(start: max(now.addingTimeInterval(-3 * 86400), first), end: now)
+        guard window.duration >= 6 * 3600 else { return nil }
+        return cellular(in: window) / window.duration * 86400
+    }
+
+    // MARK: - 買い切りのプラン
+
+    /// その時刻までの使用量を、トッピングに割り振った結果。期限が近いものから減らし、
+    /// 使い放題のトッピングの間の通信は数えない。補正で入れた残りに合わせて、その時点の残りを直す
+    func toppingStatuses(at now: Date) -> [ToppingStatus] {
+        var remaining: [UUID: Double] = [:]
+        for topping in toppings { if let bytes = topping.bytes { remaining[topping.id] = bytes } }
+        guard let first = toppings.map(\.start).min(), first < now else {
+            return toppings.map { ToppingStatus(topping: $0, remaining: remaining[$0.id]) }
+        }
+
+        // 記録は、その記録の時刻に使ったものとして割り振る
+        enum Event { case use(Double), correct(Double) }
+        var events: [(date: Date, order: Int, event: Event)] = []
+        for sample in samples where sample.date > first && sample.previousDate < now {
+            let amount = sample.cellular(in: TimeRange(start: first, end: now))
+            if amount > 0 { events.append((min(sample.date, now), 0, .use(amount))) }
+        }
+        for correction in corrections {
+            if let target = correction.remainingBytes, correction.asOf >= first, correction.asOf <= now {
+                events.append((correction.asOf, 1, .correct(target)))
+            }
+        }
+        events.sort { ($0.date, $0.order) < ($1.date, $1.order) }
+
+        for item in events {
+            let active = toppings.filter { $0.range.contains(item.date) }.sorted { $0.end < $1.end }
+            let finite = active.filter { $0.gb != nil }
+            switch item.event {
+            case .use(let amount):
+                guard !active.contains(where: { $0.gb == nil }) else { continue }
+                var left = amount
+                for topping in finite where left > 0 {
+                    let take = min(remaining[topping.id] ?? 0, left)
+                    remaining[topping.id, default: 0] -= take
+                    left -= take
+                }
+            case .correct(let target):
+                let current = finite.reduce(0) { $0 + (remaining[$1.id] ?? 0) }
+                if current > target {
+                    var left = current - target
+                    for topping in finite where left > 0 {
+                        let take = min(remaining[topping.id] ?? 0, left)
+                        remaining[topping.id, default: 0] -= take
+                        left -= take
+                    }
+                } else {
+                    var left = target - current
+                    for topping in finite where left > 0 {
+                        let room = (topping.bytes ?? 0) - (remaining[topping.id] ?? 0)
+                        let put = min(room, left)
+                        remaining[topping.id, default: 0] += put
+                        left -= put
+                    }
+                }
+            }
+        }
+        return toppings.map { ToppingStatus(topping: $0, remaining: remaining[$0.id]) }
+    }
+
+    /// 今使えるトッピング (期限の近い順)
+    func activeToppings(at now: Date) -> [ToppingStatus] {
+        toppingStatuses(at: now).filter { $0.topping.range.contains(now) }.sorted { $0.topping.end < $1.topping.end }
+    }
+
+    /// 買い切りのプランの集計。期間は、今使えるトッピングのうち最も早い使い始めから最も遅い期限まで
+    func prepaidSummary(at now: Date) -> UsageSummary {
+        let active = activeToppings(at: now).filter { $0.topping.gb != nil }
+        let todayRange = TimeRange(start: calendar.startOfDay(for: now), end: now)
+        guard let start = active.map(\.topping.start).min(), let end = active.map(\.topping.end).max() else {
+            return UsageSummary(period: TimeRange(start: todayRange.start, end: now.addingTimeInterval(86400)), now: now,
+                                used: 0, cap: 0, pacePerDay: self.pace(at: now), forecast: nil,
+                                today: cellular(in: todayRange), hasEstimate: false, noActiveTopping: true)
+        }
+        let period = TimeRange(start: start, end: end)
+        let cap = active.reduce(0) { $0 + ($1.topping.bytes ?? 0) }
+        let left = active.reduce(0) { $0 + max(0, $1.remaining ?? 0) }
+        let pace = self.pace(at: now)
+        var forecast: Date?
+        if left <= 0 {
+            forecast = now
+        } else if let pace, pace > 0 {
+            let reach = now.addingTimeInterval(left / pace * 86400)
+            if reach < period.end { forecast = reach }
+        }
+        let hasEstimate = samples.contains { $0.estimated && $0.portion(in: period) > 0 }
+        return UsageSummary(period: period, now: now, used: cap - left, cap: cap, pacePerDay: pace,
+                            forecast: forecast, today: cellular(in: todayRange), hasEstimate: hasEstimate)
+    }
+
     /// 期間の日ごとの使用量と、その日の終わりまでの累計 (今日まで)
     func days(in period: TimeRange, now: Date) -> [DayUsage] {
         var result: [DayUsage] = []
-        var day = period.start
+        var day = calendar.startOfDay(for: period.start)
         while day < min(period.end, now) {
             let next = calendar.date(byAdding: .day, value: 1, to: day)!
-            let range = TimeRange(start: day, end: min(next, now))
-            result.append(DayUsage(date: day, amount: cellular(in: range),
-                                   cumulative: used(in: period, until: range.end)))
+            let range = TimeRange(start: max(day, period.start), end: min(next, now))
+            let cumulative = isPrepaid ? prepaidSummary(at: range.end).used : used(in: period, until: range.end)
+            result.append(DayUsage(date: day, amount: cellular(in: range), cumulative: cumulative))
             day = next
         }
         return result

@@ -14,6 +14,12 @@ enum Format {
     /// プランの容量の「3GB」「0.5GB」
     static func gbText(_ gb: Double) -> String { "\(gb.formatted())GB" }
 
+    /// トッピングの容量の「30GB」「1.32TB」「使い放題」
+    static func toppingAmount(_ gb: Double?) -> String {
+        guard let gb else { return "使い放題" }
+        return gb >= 1000 ? "\((gb / 1000).formatted())TB" : gbText(gb)
+    }
+
     /// 料金の段階の「〜3GB」「無制限」
     static func tierText(_ tier: PlanTier) -> String {
         tier.upToGB.map { "〜\(gbText($0))" } ?? "無制限"

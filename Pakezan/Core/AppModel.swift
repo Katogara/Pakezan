@@ -21,6 +21,10 @@ struct StoredState: Codable, Equatable {
     var notifiedTiers: [String: Int] = [:]
     /// はじめの説明を見終えた (または飛ばした) 日時
     var introSeenAt: Date?
+    /// 買い切りのプランで入れたトッピング
+    var toppings: [Topping] = []
+    /// 期限が近いと知らせたトッピング
+    var notifiedToppingExpiries: [UUID] = []
 
     init() {}
 
@@ -40,6 +44,8 @@ struct StoredState: Codable, Equatable {
         automationHoursDone = try c.decodeIfPresent([Int].self, forKey: .automationHoursDone) ?? []
         notifiedTiers = try c.decodeIfPresent([String: Int].self, forKey: .notifiedTiers) ?? [:]
         introSeenAt = try c.decodeIfPresent(Date.self, forKey: .introSeenAt)
+        toppings = try c.decodeIfPresent([Topping].self, forKey: .toppings) ?? []
+        notifiedToppingExpiries = try c.decodeIfPresent([UUID].self, forKey: .notifiedToppingExpiries) ?? []
     }
 }
 
@@ -91,7 +97,7 @@ final class AppModel {
 
     var ledger: Ledger {
         Ledger(plan: plan, samples: state.samples, corrections: state.corrections,
-               extras: state.extras, calendar: calendar)
+               extras: state.extras, toppings: state.toppings, calendar: calendar)
     }
 
     var summary: UsageSummary { ledger.summary(at: .now) }
@@ -136,7 +142,8 @@ final class AppModel {
     private func afterMeasure(now: Date) async {
         guard isOnboarded else { return }
         let summary = ledger.summary(at: now)
-        notifier.setBadge(Int((summary.remainingFraction * 100).rounded()))
+        notifier.setBadge(summary.noActiveTopping ? 0 : Int((summary.remainingFraction * 100).rounded()))
+        notifyToppingExpiries(now: now)
 
         let key = ISO8601DateFormatter().string(from: summary.period.start)
         let level = summary.level
@@ -206,6 +213,38 @@ final class AppModel {
 
     func finishOnboarding() {
         update { $0.onboardedAt = .now }
+    }
+
+    // MARK: - 買い切りのプラン
+
+    var isPrepaid: Bool { plan.preset.spec.kind == .prepaid }
+
+    /// 今使えるトッピング (期限の近い順)
+    var activeToppings: [ToppingStatus] { ledger.activeToppings(at: .now) }
+
+    func addTopping(_ topping: Topping) {
+        update { $0.toppings.append(topping) }
+    }
+
+    func removeTopping(_ topping: Topping) {
+        update { $0.toppings.removeAll { $0.id == topping.id } }
+    }
+
+    /// 通信会社のアプリに出ている「今の残り」で合わせる
+    func addRemainingCorrection(remainingGB: Double, asOf: Date) {
+        update { $0.corrections.append(Correction(asOf: asOf, usedBytes: 0, remainingBytes: remainingGB * Plan.bytesPerGB)) }
+    }
+
+    /// 期限まで 2 日を切り、まだ残りがあるトッピングを、1 つにつき一度だけ知らせる
+    private func notifyToppingExpiries(now: Date) {
+        guard isPrepaid else { return }
+        for status in ledger.activeToppings(at: now) {
+            guard let remaining = status.remaining, remaining >= 0.01 * Plan.bytesPerGB,
+                  status.topping.end.timeIntervalSince(now) <= 2 * 86400,
+                  !state.notifiedToppingExpiries.contains(status.id) else { continue }
+            notifier.postToppingExpiry(status: status)
+            state.notifiedToppingExpiries.append(status.id)
+        }
     }
 
     var hasSeenIntro: Bool { state.introSeenAt != nil }

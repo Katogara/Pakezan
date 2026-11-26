@@ -43,7 +43,19 @@ final class Notifier {
              body: "今月の使用量が\(previous)を超え、\(spec.name)の料金が「\(Format.tierText(tier))」の段階になりました\(price)。")
     }
 
+    /// 買い切りのトッピングの期限が近い
+    func postToppingExpiry(status: ToppingStatus) {
+        let remaining = status.remaining.map { Format.bytes(max(0, $0)) } ?? ""
+        post(id: "topping-\(status.id.uuidString)", title: "パケざん",
+             body: "\(Format.toppingAmount(status.topping.gb))のトッピングは、\(Format.dateTime(status.topping.end))に期限が切れます（残り\(remaining)）。")
+    }
+
     func postDailySummary(_ summary: UsageSummary) {
+        if summary.noActiveTopping {
+            post(id: "daily", title: "今日の通信量",
+                 body: "今日は\(Format.bytes(summary.today))使いました。今使えるトッピングはありません。")
+            return
+        }
         let outlook: String
         if let forecast = summary.forecast {
             outlook = "このペースだと\(Format.day(forecast))に上限です。"
