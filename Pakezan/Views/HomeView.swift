@@ -12,6 +12,9 @@ struct HomeView: View {
                 VStack(spacing: 16) {
                     let summary = model.summary
                     RemainingCard(summary: summary, plan: model.plan)
+                    if let notice = model.plan.preset.spec.uncountedNotice {
+                        UncountedCard(title: notice.title, message: notice.message)
+                    }
                     if model.isPrepaid {
                         ToppingsCard(showTopping: $showTopping)
                     }
@@ -100,11 +103,6 @@ private struct RemainingCard: View {
                         .font(.title.bold())
                     Text("\(Format.bytes(summary.used)) / \(Format.bytes(summary.cap)) 使用")
                         .foregroundStyle(.secondary)
-                    if plan.preset.excludesLINE {
-                        PhraseText("LINE の分も含むので、通信会社の値より多めに出ます")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
                 }
             }
             if let tierText = Self.tierText(spec: plan.preset.spec, used: summary.used) {
@@ -130,6 +128,27 @@ private struct RemainingCard: View {
             text += "あと\(Format.bytes(max(0, limit * Plan.bytesPerGB - used)))で「\(Format.tierText(next))」の段階に上がります。"
         }
         return text
+    }
+}
+
+/// 通信会社が数えない通信があるプランで、実際の残りのほうが多いことを知らせる
+private struct UncountedCard: View {
+    let title: String
+    let message: String
+
+    var body: some View {
+        Card {
+            Label {
+                HeadlineText(title)
+            } icon: {
+                Image(systemName: "info.circle.fill")
+                    .foregroundStyle(.blue)
+            }
+            .font(.headline)
+            PhraseText(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 

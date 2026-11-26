@@ -60,6 +60,8 @@ struct PlanFields: View {
     @Environment(AppModel.self) private var model
     /// 選べる量のほかに、自分で量を入れている
     @State private var entersOwnCap = false
+    /// 数えない通信があるプランを選んだときに出す知らせ
+    @State private var notice: (title: String, message: String)?
 
     /// Picker で「ほかの量」を表す値
     private static let ownCapTag = -1.0
@@ -69,17 +71,21 @@ struct PlanFields: View {
         let spec = plan.preset.spec
         Picker("会社", selection: Binding(get: { spec.carrier }, set: { carrier in
             guard carrier != spec.carrier, let first = carrier.plans.first else { return }
-            entersOwnCap = false
-            model.choosePlan(PlanPreset(id: first.id))
+            select(first)
         })) {
             ForEach(Carrier.allCases) { carrier in
                 Text(carrier.name).tag(carrier)
             }
         }
+        .alert(notice?.title ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
+            Button("分かりました") { notice = nil }
+        } message: {
+            Text(notice?.message ?? "")
+        }
         if spec.carrier.plans.count > 1 {
             Picker("プラン", selection: Binding(get: { spec.id }, set: { id in
-                entersOwnCap = false
-                model.choosePlan(PlanPreset(id: id))
+                guard let item = PlanCatalog.spec(id: id) else { return }
+                select(item)
             })) {
                 ForEach(spec.carrier.plans) { item in
                     Text(item.title).tag(item.id)
@@ -124,6 +130,13 @@ struct PlanFields: View {
                 }
             }
         }
+    }
+
+    /// プランを選び直す。数えない通信があるプランなら、残りのずれを知らせる
+    private func select(_ item: PlanSpec) {
+        entersOwnCap = false
+        model.choosePlan(PlanPreset(id: item.id))
+        notice = item.uncountedNotice
     }
 
     /// 選べる量の表示。段階制なら、その段階の月額も添える
@@ -185,9 +198,7 @@ enum PlanInfo {
         if spec.carryover {
             lines.append("先月の余りを繰り越せるプランです。繰り越した分はホームの「容量を追加した」で足してください。")
         }
-        if spec.excludesLINE {
-            lines.append("通信会社は LINE アプリの通信を数えません（LINE ギガフリー）。パケざんは LINE の分も含めて数えるので、少し多めに出ます。")
-        }
+        if let notice = spec.uncountedNotice { lines.append(notice.message) }
         if let note = spec.note { lines.append(note) }
         return lines
     }
