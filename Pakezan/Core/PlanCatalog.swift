@@ -60,6 +60,16 @@ struct PlanSpec: Identifiable, Equatable {
 
     var title: String { closed ? "\(name)（受付終了）" : name }
 
+    /// 通信会社が使用量に数えない通信。パケざんは数えてしまうので、残りが実際より少なく出る
+    var uncountedTraffic: String? { excludesLINE ? "LINE アプリの通信（LINE ギガフリー）" : nil }
+
+    /// 数えない通信があるプランで、残りのずれを知らせる文
+    var uncountedNotice: (title: String, message: String)? {
+        guard let uncountedTraffic else { return nil }
+        return ("実際の残りはパケざんの表示より多めです",
+                "\(carrier.name)は\(uncountedTraffic)を使用量に数えません。パケざんはこの携帯の通信をすべて数えるので、その分だけ使用量が多く、残りが少なく出ます。ずれが気になるときは、ホームの「通信会社の値で補正」で実際の値に合わせてください。")
+    }
+
     /// 設定の画面で、上限の行に付ける名前
     var capLabel: String {
         switch kind {
