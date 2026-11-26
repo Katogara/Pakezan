@@ -69,31 +69,28 @@ struct PlanFields: View {
     var body: some View {
         let plan = model.plan
         let spec = plan.preset.spec
-        Picker("会社", selection: Binding(get: { spec.carrier }, set: { carrier in
+        ChoiceRow(title: "会社", choices: Carrier.allCases.map { Choice(value: $0, text: $0.name) },
+                  selection: Binding(get: { spec.carrier }, set: { carrier in
             guard carrier != spec.carrier, let first = carrier.plans.first else { return }
             select(first)
-        })) {
-            ForEach(Carrier.allCases) { carrier in
-                Text(carrier.name).tag(carrier)
-            }
-        }
+        }))
         .alert(notice?.title ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
             Button("分かりました") { notice = nil }
         } message: {
             Text(notice?.message ?? "")
         }
         if spec.carrier.plans.count > 1 {
-            Picker("プラン", selection: Binding(get: { spec.id }, set: { id in
-                guard let item = PlanCatalog.spec(id: id) else { return }
+            ChoiceRow(title: "プラン", choices: spec.carrier.plans.map { Choice(value: $0.id, text: $0.title) },
+                      selection: Binding(get: { spec.id }, set: { id in
+                guard id != spec.id, let item = PlanCatalog.spec(id: id) else { return }
                 select(item)
-            })) {
-                ForEach(spec.carrier.plans) { item in
-                    Text(item.title).tag(item.id)
-                }
-            }
+            }))
         }
         if spec.id != PlanPreset.custom.id, spec.kind != .prepaid {
-            Picker(spec.capLabel, selection: Binding(get: {
+            ChoiceRow(title: spec.capLabel,
+                      choices: spec.capOptions.map { Choice(value: $0, text: capOptionText(spec, $0)) }
+                          + [Choice(value: Self.ownCapTag, text: "ほかの量を入れる")],
+                      selection: Binding(get: {
                 entersOwnCap || !spec.capOptions.contains(plan.capGB) ? Self.ownCapTag : plan.capGB
             }, set: { value in
                 entersOwnCap = value == Self.ownCapTag
@@ -101,12 +98,7 @@ struct PlanFields: View {
                 var p = plan
                 p.capGB = value
                 model.setPlan(p)
-            })) {
-                ForEach(spec.capOptions, id: \.self) { gb in
-                    Text(capOptionText(spec, gb)).tag(gb)
-                }
-                Text("ほかの量を入れる").tag(Self.ownCapTag)
-            }
+            }))
         }
         if spec.kind != .prepaid, spec.id == PlanPreset.custom.id || entersOwnCap || !spec.capOptions.contains(plan.capGB) {
             Stepper(onIncrement: {
@@ -136,7 +128,9 @@ struct PlanFields: View {
     private func select(_ item: PlanSpec) {
         entersOwnCap = false
         model.choosePlan(PlanPreset(id: item.id))
-        notice = item.uncountedNotice
+        // 選ぶ画面から戻る動きが終わってから出す (動きの途中だと知らせが出ないことがある)
+        let next = item.uncountedNotice
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { notice = next }
     }
 
     /// 選べる量の表示。段階制なら、その段階の月額も添える

@@ -85,12 +85,10 @@ struct ToppingSheet: View {
                     }
                 } else {
                     Section("買ったトッピング") {
-                        Picker("トッピング", selection: $preset) {
-                            ForEach(PlanCatalog.povoToppings) { item in
-                                Text(item.title).tag(Optional(item))
-                            }
-                            Text("そのほか").tag(ToppingPreset?.none)
-                        }
+                        ChoiceRow(title: "トッピング",
+                                  choices: PlanCatalog.povoToppings.map { Choice(value: Optional($0), text: $0.title) }
+                                      + [Choice(value: ToppingPreset?.none, text: "そのほか")],
+                                  selection: $preset)
                         if preset == nil {
                             TextField("容量（GB） 例: 20", value: $customGB, format: .number)
                                 .keyboardType(.decimalPad)
