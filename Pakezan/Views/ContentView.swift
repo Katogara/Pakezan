@@ -27,11 +27,15 @@ struct ContentView: View {
 
     var body: some View {
         TabView {
+            // 広告は画面の下 (タブの上) に出す。設定の画面には出さない
             HomeView()
+                .safeAreaInset(edge: .bottom, spacing: 0) { AdBannerSlot() }
                 .tabItem { Label("ホーム", systemImage: "gauge.with.dots.needle.33percent") }
             TrendView()
+                .safeAreaInset(edge: .bottom, spacing: 0) { AdBannerSlot() }
                 .tabItem { Label("推移", systemImage: "chart.line.uptrend.xyaxis") }
             HoursView()
+                .safeAreaInset(edge: .bottom, spacing: 0) { AdBannerSlot() }
                 .tabItem { Label("時間帯", systemImage: "clock") }
             SettingsView()
                 .tabItem { Label("設定", systemImage: "gearshape") }

@@ -37,6 +37,8 @@ struct SettingsView: View {
                     LabeledContent("記録の件数", value: "\(model.state.samples.count)件")
                 }
 
+                AdFreeSection()
+
                 Section("このアプリ") {
                     Button("はじめの説明を見る") { showIntro = true }
                     if let expiry = SigningInfo.expiry {
@@ -51,6 +53,53 @@ struct SettingsView: View {
             .fullScreenCover(isPresented: $showIntro) {
                 IntroView { showIntro = false }
             }
+        }
+    }
+}
+
+/// 広告を消す購入と、購入の復元。値段は App Store の設定から表示される
+private struct AdFreeSection: View {
+    @State private var adFree = AdFreeStore.shared
+    @State private var ads = AdController.shared
+    @State private var restoring = false
+
+    var body: some View {
+        Section {
+            if adFree.isPurchased {
+                Label("広告を消しました。ありがとうございます", systemImage: "checkmark.seal.fill")
+            } else {
+                ProductView(id: AdFreeStore.productID) {
+                    Image(systemName: "rectangle.slash")
+                        .font(.title2)
+                        .foregroundStyle(Palette.accent)
+                }
+                .productViewStyle(.compact)
+                .onInAppPurchaseCompletion { _, result in
+                    if case .success(.success(let verification)) = result, case .verified(let transaction) = verification {
+                        await transaction.finish()
+                    }
+                    await adFree.refresh()
+                }
+            }
+            Button(restoring ? "確かめています…" : "購入を復元") {
+                restoring = true
+                Task {
+                    await adFree.restore()
+                    restoring = false
+                }
+            }
+            .disabled(restoring)
+            #if !APP_STORE
+            Toggle("広告の見本を出す（開発用）", isOn: Binding(get: { !ads.hidesSample }, set: { ads.hidesSample = !$0 }))
+            #endif
+        } header: {
+            Text("広告")
+        } footer: {
+            #if APP_STORE
+            PhraseText("一度買うと、広告が出なくなります。iPhone を替えたときは「購入を復元」を押してください。")
+            #else
+            PhraseText("一度買うと、広告が出なくなります。iPhone を替えたときは「購入を復元」を押してください。開発中の版は App Store から製品を読めないので、買えません。広告はテスト用のものが出ます。")
+            #endif
         }
     }
 }
