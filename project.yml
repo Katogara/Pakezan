@@ -15,12 +15,17 @@ packages:
   BudouX:
     url: https://github.com/griffin-stewie/BudouX.swift
     exactVersion: 0.10.0
+  # 広告 (Google AdMob)。広告を消す購入は StoreKit (AdFreeStore.swift)
+  GoogleMobileAds:
+    url: https://github.com/googleads/swift-package-manager-google-mobile-ads
+    exactVersion: 13.13.0
 targets:
   Pakezan:
     type: application
     platform: iOS
     dependencies:
       - package: BudouX
+      - package: GoogleMobileAds
     sources:
       - path: Pakezan
         excludes:
@@ -32,6 +37,11 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
+        # 広告の ID。いまは Google のテスト用の ID (本物の広告は出ず、収益も出ない)。
+        # App Store に出すときは、AdMob で作ったアプリの ID とバナーの広告ユニットの ID に替え、
+        # SWIFT_ACTIVE_COMPILATION_CONDITIONS に APP_STORE を足す (開発用の「広告の見本を出す」を消す)
+        ADMOB_APP_ID: ca-app-pub-3940256099942544~1458002511
+        ADMOB_BANNER_ID: ca-app-pub-3940256099942544/2435281174
   PakezanTests:
     type: bundle.unit-test
     platform: iOS
