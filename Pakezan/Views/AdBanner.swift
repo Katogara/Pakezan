@@ -47,7 +47,7 @@ final class AdController {
             try? await Task.sleep(for: .seconds(1))
             _ = await ATTrackingManager.requestTrackingAuthorization()
         }
-        MobileAds.shared.start()
+        _ = await MobileAds.shared.start()
     }
 }
 
