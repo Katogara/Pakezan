@@ -21,6 +21,7 @@ struct PakezanApp: App {
             case .active:
                 // 開いたときにも記録する (オートメーションの合間の分が分かる)
                 Task { await model.measure(source: .app) }
+                Task { await AdFreeStore.shared.refresh() }
             case .background:
                 BackgroundRefresh.schedule()
             default:
